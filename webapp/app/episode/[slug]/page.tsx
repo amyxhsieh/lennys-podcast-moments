@@ -37,6 +37,7 @@ export default function EpisodeDetailPage() {
   const slug = params.slug as string;
   const clipStartParam = searchParams.get('clip');
   const topicParam = searchParams.get('topic'); // Search query/keyword
+  const fromParam = searchParams.get('from'); // Episode to return to in carousel
   
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
@@ -435,9 +436,14 @@ export default function EpisodeDetailPage() {
   const thumbnailUrl = `https://img.youtube.com/vi/${episode.videoId}/maxresdefault.jpg`;
 
   const handleBack = () => {
-    // Navigate back to search results with topic query preserved
+    // Navigate back to search results with topic query and carousel position preserved
     if (topicParam) {
-      router.push(`/?q=${encodeURIComponent(topicParam)}`);
+      const params = new URLSearchParams();
+      params.set('q', topicParam);
+      if (fromParam) {
+        params.set('from', fromParam);
+      }
+      router.push(`/?${params.toString()}`);
     } else {
       router.push('/');
     }

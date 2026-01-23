@@ -51,6 +51,9 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isLogoHovered, setIsLogoHovered] = useState(false);
+  
+  // Read the "from" parameter to restore carousel position when returning from detail page
+  const returnFromEpisode = searchParams.get('from');
 
   // Handle search
   const handleSearch = async (
@@ -344,6 +347,7 @@ function HomeContent() {
                 clips={clips}
                 transcriptIndex={transcriptIndex}
                 searchQuery={searchQuery}
+                initialEpisodeSlug={returnFromEpisode || undefined}
               />
                     )}
                   </>

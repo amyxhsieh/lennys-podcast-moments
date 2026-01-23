@@ -27,10 +27,20 @@ interface Carousel3DProps {
   clips: any[];
   transcriptIndex?: Record<string, any[]>;
   searchQuery?: string;
+  initialEpisodeSlug?: string; // Episode to center on initially
 }
 
-export default function Carousel3D({ episodes, clips, transcriptIndex = {}, searchQuery = '' }: Carousel3DProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+export default function Carousel3D({ episodes, clips, transcriptIndex = {}, searchQuery = '', initialEpisodeSlug }: Carousel3DProps) {
+  // Find initial index based on episode slug if provided
+  const getInitialIndex = () => {
+    if (initialEpisodeSlug) {
+      const index = episodes.findIndex(ep => ep.slug === initialEpisodeSlug);
+      return index !== -1 ? index : 0;
+    }
+    return 0;
+  };
+  
+  const [currentIndex, setCurrentIndex] = useState(getInitialIndex());
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Get clips for each episode (pre-generated or generate from transcript)

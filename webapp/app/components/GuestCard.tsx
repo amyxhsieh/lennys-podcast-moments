@@ -53,6 +53,8 @@ export default function GuestCard({
     }
     if (searchQuery) {
       params.set('topic', searchQuery);
+      // Also include the episode slug so we can return to it in the carousel
+      params.set('from', slug);
     }
     
     const queryString = params.toString();
