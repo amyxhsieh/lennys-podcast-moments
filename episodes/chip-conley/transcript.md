@@ -1,5 +1,5 @@
 ---
-guest: Chip Conley
+guest: Maggie Crowley
 title: Mastering product strategy and growing as a PM | Maggie Crowley (Toast, Drift,
   TripAdvisor)
 youtube_url: https://www.youtube.com/watch?v=4LjddcccYIo
