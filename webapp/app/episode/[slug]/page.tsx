@@ -7,6 +7,7 @@ import TranscriptPanel from '@/app/components/TranscriptPanel';
 import LogoSpark from '@/app/components/LogoSpark';
 import { secondsToTimestamp } from '@/app/utils/timestamp';
 import { formatDescription } from '@/app/utils/formatDescription';
+import { generateClipsFromTranscript } from '@/app/utils/search';
 import styles from './page.module.css';
 
 interface Episode {
@@ -169,7 +170,6 @@ export default function EpisodeDetailPage() {
           // If no pre-generated clips found, try transcript search
           if (episodeClips.length === 0 && transcriptIndexData[slug]) {
             console.log('📝 No pre-generated clips found, searching transcript...');
-            const { generateClipsFromTranscript } = require('../utils/search');
             const generatedClips = generateClipsFromTranscript(topicParam, slug, transcriptIndexData);
             console.log('🎬 Generated', generatedClips.length, 'clips from transcript');
             
