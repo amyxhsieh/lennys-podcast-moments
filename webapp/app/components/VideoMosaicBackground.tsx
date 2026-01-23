@@ -13,23 +13,46 @@ interface VideoMosaicBackgroundProps {
 export default function VideoMosaicBackground({ episodes }: VideoMosaicBackgroundProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const throttleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+      // Throttle mouse tracking to every 50ms for better performance
+      if (!throttleTimeoutRef.current) {
+        throttleTimeoutRef.current = setTimeout(() => {
+          setMousePos({ x: e.clientX, y: e.clientY });
+          throttleTimeoutRef.current = null;
+        }, 50);
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (throttleTimeoutRef.current) {
+        clearTimeout(throttleTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Create a scattered collage of video tiles with random positions and sizes
+  // Use a grid-based approach with randomness to ensure even distribution
   const gridItems = episodes.slice(0, 30).map((episode, index) => {
-    // Random size between 150px and 350px
-    const size = 150 + Math.random() * 200;
-    // Random position
-    const left = Math.random() * 100;
-    const top = Math.random() * 100;
+    // Smaller tiles: Random size between 120px and 280px
+    const size = 120 + Math.random() * 160;
+    
+    // Distribute in a 6x5 grid pattern with randomness to avoid clustering
+    const gridCols = 6;
+    const gridRows = 5;
+    const gridCol = index % gridCols;
+    const gridRow = Math.floor(index / gridCols);
+    
+    // Calculate base position from grid, then add randomness within the grid cell
+    const cellWidth = 100 / gridCols;
+    const cellHeight = 100 / gridRows;
+    const left = gridCol * cellWidth + (Math.random() * cellWidth * 0.7);
+    const top = gridRow * cellHeight + (Math.random() * cellHeight * 0.7);
+    
     // Random rotation between -15 and 15 degrees
     const rotation = (Math.random() - 0.5) * 30;
     // Random start time
@@ -64,11 +87,11 @@ export default function VideoMosaicBackground({ episodes }: VideoMosaicBackgroun
             }}
           >
             <iframe
-              src={`https://www.youtube.com/embed/${item.videoId}?autoplay=1&mute=1&controls=0&showinfo=0&modestbranding=1&loop=1&playlist=${item.videoId}&start=${item.startTime}&rel=0&disablekb=1&fs=0`}
+              src={`https://www.youtube.com/embed/${item.videoId}?autoplay=1&mute=1&controls=0&showinfo=0&modestbranding=1&loop=1&playlist=${item.videoId}&start=${item.startTime}&rel=0&disablekb=1&fs=0&vq=small`}
               className={styles.videoFrame}
               allow="autoplay; encrypted-media"
               title={item.guest}
-              loading={index < 15 ? 'eager' : 'lazy'}
+              loading={index < 10 ? 'eager' : 'lazy'}
             />
           </div>
         ))}

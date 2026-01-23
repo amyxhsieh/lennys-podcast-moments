@@ -48,25 +48,29 @@ export default function Carousel3D({ episodes, clips, transcriptIndex = {}, sear
     
     // If pre-generated clips exist, use them
     if (preGeneratedClips.length > 0) {
-      return preGeneratedClips.map(clip => ({
+      const mappedClips = preGeneratedClips.map(clip => ({
         startSeconds: clip.startSeconds || clip.startTime || 0,
         endSeconds: clip.endSeconds || clip.endTime || 0,
         startTimestamp: clip.startTimestamp || '',
         endTimestamp: clip.endTimestamp || '',
         previewText: clip.previewText || clip.preview || ''
       }));
+      // Sort by start time to ensure first clip is chronologically first
+      return mappedClips.sort((a, b) => a.startSeconds - b.startSeconds);
     }
     
     // Otherwise, generate clips from transcript if available
     if (transcriptIndex[episodeSlug]) {
       const generatedClips = generateClipsFromTranscript(searchQuery, episodeSlug, transcriptIndex);
-      return generatedClips.map(clip => ({
+      const mappedClips = generatedClips.map(clip => ({
         startSeconds: clip.startSeconds,
         endSeconds: clip.endSeconds,
         startTimestamp: clip.startTimestamp,
         endTimestamp: clip.endTimestamp,
         previewText: clip.previewText || ''
       }));
+      // Sort by start time to ensure first clip is chronologically first
+      return mappedClips.sort((a, b) => a.startSeconds - b.startSeconds);
     }
     
     return [];

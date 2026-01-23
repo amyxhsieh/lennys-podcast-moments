@@ -119,7 +119,13 @@ function extractTranscriptSegments(content) {
         });
       }
 
-      currentSpeaker = timestampMatch[1]?.trim() || null;
+      // If speaker is present, update it; otherwise carry forward previous speaker
+      const newSpeaker = timestampMatch[1]?.trim();
+      if (newSpeaker) {
+        currentSpeaker = newSpeaker;
+      }
+      // If no speaker label, keep currentSpeaker from previous segment
+      
       currentTimestamp = timestampMatch[2];
       currentText = [];
     } else if (currentTimestamp !== null) {
@@ -356,12 +362,21 @@ function secondsToTimestamp(seconds) {
  * Lenny always introduces the guest at the start - this is more complete than YouTube descriptions
  */
 function extractGuestIntroduction(segments, guestName) {
+  // Helper function to check if speaker is Lenny (handles variations)
+  const isLenny = (speaker) => {
+    if (!speaker) return false;
+    const speakerLower = speaker.toLowerCase();
+    return speakerLower === 'lenny' || 
+           speakerLower === 'lenny rachitsky' ||
+           speakerLower.startsWith('lenny ');
+  };
+  
   // Look for all segments from Lenny in the first 3 minutes (180 seconds)
   const allEarlySegments = segments.filter(seg => seg.timestampSeconds < 180);
   
   // Find the segment containing guest introduction patterns
   const introStartIndex = allEarlySegments.findIndex(seg => 
-    seg.speaker === 'Lenny Rachitsky' && (
+    isLenny(seg.speaker) && (
       seg.text.toLowerCase().includes('today my guest is') ||
       seg.text.toLowerCase().includes('today, my guest is') ||
       seg.text.toLowerCase().includes('today my guests are') ||
@@ -394,7 +409,7 @@ function extractGuestIntroduction(segments, guestName) {
     const segment = allEarlySegments[i];
     
     // Only include continuous segments from Lenny
-    if (segment.speaker !== 'Lenny Rachitsky') {
+    if (!isLenny(segment.speaker)) {
       break; // Stop when speaker changes
     }
     
