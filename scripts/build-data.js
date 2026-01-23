@@ -352,6 +352,95 @@ function secondsToTimestamp(seconds) {
 }
 
 /**
+ * Extract guest introduction from transcript
+ * Lenny always introduces the guest at the start - this is more complete than YouTube descriptions
+ */
+function extractGuestIntroduction(segments, guestName) {
+  // Look for all segments from Lenny in the first 3 minutes (180 seconds)
+  const allEarlySegments = segments.filter(seg => seg.timestampSeconds < 180);
+  
+  // Find the segment containing guest introduction patterns
+  const introStartIndex = allEarlySegments.findIndex(seg => 
+    seg.speaker === 'Lenny Rachitsky' && (
+      seg.text.toLowerCase().includes('today my guest is') ||
+      seg.text.toLowerCase().includes('today, my guest is') ||
+      seg.text.toLowerCase().includes('today my guests are') ||
+      seg.text.toLowerCase().includes('today, my guests are') ||
+      seg.text.toLowerCase().includes('my guest today is') ||
+      seg.text.toLowerCase().includes('today\'s guest is')
+    )
+  );
+
+  if (introStartIndex === -1) {
+    return null; // No introduction found
+  }
+
+  // Collect continuous segments from Lenny for the introduction
+  const introSegments = [];
+  let totalLength = 0;
+  const maxLength = 800; // Target around 800 characters
+  const stopPhrases = [
+    'welcome to the podcast', 
+    'thanks for being here', 
+    'thank you for being here',
+    'thank you so much for being here',
+    'excited to be here',
+    'okay, so what i want',
+    'so let\'s',
+    'let me start'
+  ];
+
+  for (let i = introStartIndex; i < allEarlySegments.length; i++) {
+    const segment = allEarlySegments[i];
+    
+    // Only include continuous segments from Lenny
+    if (segment.speaker !== 'Lenny Rachitsky') {
+      break; // Stop when speaker changes
+    }
+    
+    const textLower = segment.text.toLowerCase();
+    
+    // Check if this segment signals the end of the introduction
+    const hasStopPhrase = stopPhrases.some(phrase => textLower.includes(phrase));
+    
+    // Add this segment
+    introSegments.push(segment.text);
+    totalLength += segment.text.length;
+    
+    // Stop if we hit a stop phrase or exceeded max length
+    if (hasStopPhrase || totalLength > maxLength) {
+      break;
+    }
+    
+    // Stop if there's a significant time gap to the next segment (> 30 seconds)
+    if (i + 1 < allEarlySegments.length) {
+      const nextSegment = allEarlySegments[i + 1];
+      const timeGap = nextSegment.timestampSeconds - segment.timestampSeconds;
+      if (timeGap > 30) {
+        break;
+      }
+    }
+  }
+
+  if (introSegments.length === 0) return null;
+
+  // Join segments with space and clean up trailing phrases
+  let introduction = introSegments.join(' ');
+  
+  // Remove any trailing phrases that signal the end of intro
+  introduction = introduction.replace(/\s*With that,?\s+I bring you.*/i, '');
+  introduction = introduction.replace(/\s*Welcome to the podcast.*/i, '');
+  introduction = introduction.replace(/\s*Thanks? (for being here|so much).*/i, '');
+  introduction = introduction.replace(/\s*If you enjoy this podcast.*/i, '');
+  introduction = introduction.replace(/\s*Excited to be here.*/i, '');
+  introduction = introduction.replace(/\s*Okay,?\s*so what I want.*/i, '');
+  introduction = introduction.replace(/\s*So let('s|s).*/i, '');
+  introduction = introduction.replace(/\s*Let me start.*/i, '');
+  
+  return introduction.trim();
+}
+
+/**
  * Build episodes data
  */
 function buildEpisodesData() {
@@ -370,6 +459,10 @@ function buildEpisodesData() {
 
     const segments = extractTranscriptSegments(content);
 
+    // Try to extract introduction from transcript, fallback to YouTube description
+    const extractedIntro = extractGuestIntroduction(segments, frontmatter.guest);
+    const description = extractedIntro || frontmatter.description || '';
+
     episodes.push({
       slug,
       guest: frontmatter.guest || 'Unknown',
@@ -377,7 +470,7 @@ function buildEpisodesData() {
       videoId: frontmatter.video_id,
       youtubeUrl: frontmatter.youtube_url || `https://www.youtube.com/watch?v=${frontmatter.video_id}`,
       publishDate: frontmatter.publish_date || '',
-      description: frontmatter.description || '',
+      description: description,
       duration: frontmatter.duration || '',
       durationSeconds: frontmatter.duration_seconds || 0,
       viewCount: frontmatter.view_count || 0,
