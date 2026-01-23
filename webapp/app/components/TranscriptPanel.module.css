@@ -1,0 +1,99 @@
+.panel {
+  background: var(--color-background-elevated);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-lg);
+  display: block; /* Changed from flex to block to allow natural content flow */
+  width: 100%;
+  /* No height constraints - let content expand fully */
+}
+
+.panelTitle {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-md);
+}
+
+.transcriptText {
+  width: 100%;
+  padding-right: var(--spacing-sm);
+  /* No height constraints - let content expand naturally */
+}
+
+.transcriptText::-webkit-scrollbar {
+  width: 8px;
+}
+
+.transcriptText::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.transcriptText::-webkit-scrollbar-thumb {
+  background: rgba(255, 154, 61, 0.3);
+  border-radius: 4px;
+}
+
+.transcriptText::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+.textContent {
+  font-family: var(--font-body);
+  font-size: 16px; /* Slightly larger for better readability */
+  color: var(--color-text);
+  line-height: 1.9; /* Increased line height for better readability */
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  /* Ensure text is not cut off */
+  overflow: visible;
+  max-width: 100%;
+}
+
+.paragraph {
+  margin: 0 0 var(--spacing-md) 0;
+  line-height: 1.9;
+}
+
+.paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.speaker {
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-right: var(--spacing-xs);
+}
+
+.speech {
+  color: var(--color-text);
+}
+
+.loading {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: var(--spacing-xl);
+}
+
+.clipInfo {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.clipRange {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .textContent {
+    font-size: 14px;
+  }
+}

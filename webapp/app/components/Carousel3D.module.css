@@ -1,0 +1,153 @@
+.carouselContainer {
+  width: 100%;
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--spacing-xl) 0 var(--spacing-2xl);
+  position: relative;
+}
+
+.carouselWrapper {
+  width: 100%;
+  max-width: 1400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  position: relative;
+  perspective: 2000px;
+  padding: 0 var(--spacing-3xl);
+}
+
+.carouselTrack {
+  position: relative;
+  width: 450px;
+  height: 600px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+.cardWrapper {
+  position: absolute;
+  width: 450px;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.cardWrapper.center {
+  z-index: 10;
+}
+
+.navButton {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-background-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.navButton:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-glow);
+}
+
+.navButton .material-icons {
+  font-size: 32px;
+}
+
+.pagination {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+  align-items: center;
+  justify-content: center;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  padding: 0;
+}
+
+.dot:hover {
+  background: var(--color-text-secondary);
+  transform: scale(1.2);
+}
+
+.activeDot {
+  background: var(--color-primary);
+  width: 24px;
+  border-radius: 4px;
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  font-family: var(--font-body);
+  color: var(--color-text-secondary);
+  font-size: 18px;
+}
+
+@media (max-width: 1200px) {
+  .carouselWrapper {
+    padding: 0 var(--spacing-xl);
+  }
+  
+  .carouselTrack {
+    width: 380px;
+    height: 550px;
+  }
+  
+  .cardWrapper {
+    width: 380px;
+  }
+  
+  .cardWrapper {
+    transform: translateX(calc(var(--offset) * 380px)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .carouselWrapper {
+    padding: 0 var(--spacing-md);
+  }
+  
+  .carouselTrack {
+    width: 320px;
+    height: 500px;
+  }
+  
+  .cardWrapper {
+    width: 320px;
+  }
+  
+  .navButton {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .navButton .material-icons {
+    font-size: 28px;
+  }
+}

@@ -1,0 +1,53 @@
+.keywordTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.keywordTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--color-primary-lighter);
+  border: 1px solid rgba(255, 154, 61, 0.2);
+  border-radius: var(--border-radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.keywordTag:hover {
+  background-color: rgba(255, 154, 61, 0.15);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.keywordName {
+  font-weight: 500;
+}
+
+.keywordCount {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.6);
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+}
+
+@media (max-width: 600px) {
+  .keywordTags {
+    gap: 8px;
+  }
+  
+  .keywordTag {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
