@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import SearchInput from './components/SearchInput';
@@ -39,7 +39,7 @@ interface SearchResult {
   matchedKeywords?: string[];
 }
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [episodes, setEpisodes] = useState<Episode[]>([]);
@@ -369,3 +369,20 @@ export default function Home() {
             </div>
           );
         }
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className={styles.page}>
+        <main className={styles.main}>
+          <div className={styles.loadingState}>
+            <div className={styles.loadingSpinner}></div>
+            <p className={styles.loadingText}>Loading...</p>
+          </div>
+        </main>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
+  );
+}
