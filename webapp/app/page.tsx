@@ -325,9 +325,7 @@ export default function Home() {
                   videoId: episode.videoId,
                   description: episode.description,
                   publishDate: episode.publishDate,
-                  duration: episode.duration,
                   viewCount: episode.viewCount,
-                  youtubeUrl: episode.youtubeUrl,
                   keywords: episode.keywords,
                   episodeSlug: episode.slug,
                   // Only preserve search-specific fields
