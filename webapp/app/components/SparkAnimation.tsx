@@ -22,7 +22,7 @@ interface Particle {
 
 export default function SparkAnimation() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const particlesRef = useRef<Particle[]>([]);
   const mousePosRef = useRef<{ x: number; y: number } | null>(null);
   const [isVisible, setIsVisible] = useState(true);
