@@ -22,7 +22,7 @@ interface LogoSparkProps {
 
 export default function LogoSpark({ isHovered }: LogoSparkProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const particlesRef = useRef<Particle[]>([]);
   const timeRef = useRef(0);
 
