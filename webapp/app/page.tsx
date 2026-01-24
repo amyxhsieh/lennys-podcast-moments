@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import SearchInput from './components/SearchInput';
 import KeywordTags from './components/KeywordTags';
 import Carousel3D from './components/Carousel3D';
@@ -247,13 +248,13 @@ function HomeContent() {
             <SparkAnimation />
             <div className={styles.hero}>
               <div className={styles.logoWrapper}>
-                <Image
-                  src="/Lenny Podcast Logo.webp"
+        <Image
+                  src="/lennypodcastlogo.png"
                   alt="Lenny's Podcast"
-                  width={200}
-                  height={200}
+                  width={160}
+                  height={160}
                   priority
-                  className={styles.logo}
+          className={styles.logo}
                 />
               </div>
               <h1 className={styles.tagline}>Learn from podcast moments</h1>
@@ -272,15 +273,15 @@ function HomeContent() {
                 Built with love from{' '}
                 <a 
                   href="https://x.com/lennysan" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+              target="_blank"
+              rel="noopener noreferrer"
                   className={styles.footerLink}
                 >
                   Lenny's Podcast
                 </a>
                 .
-              </p>
-            </div>
+          </p>
+        </div>
           </>
         ) : (
           <>
@@ -354,23 +355,25 @@ function HomeContent() {
                 )}
                 {/* Logo in bottom-right corner - only show on search results, not homepage */}
                 {showCarousel && (
-                  <div 
-                    className={styles.bottomLogo}
-                    onMouseEnter={() => setIsLogoHovered(true)}
-                    onMouseLeave={() => setIsLogoHovered(false)}
-                  >
-                    <LogoSpark isHovered={isLogoHovered} />
-                    <Image
-                      src="/Lenny Podcast Logo.webp"
-                      alt="Lenny's Podcast"
-                      width={80}
-                      height={80}
-                      className={styles.brandLogo}
-                    />
-                  </div>
+                  <Link href="/">
+                    <div 
+                      className={styles.bottomLogo}
+                      onMouseEnter={() => setIsLogoHovered(true)}
+                      onMouseLeave={() => setIsLogoHovered(false)}
+                    >
+                      <LogoSpark isHovered={isLogoHovered} />
+            <Image
+                        src="/lennypodcastlogo.png"
+                        alt="Lenny's Podcast"
+                        width={64}
+                        height={64}
+                        className={styles.brandLogo}
+                      />
+        </div>
+                  </Link>
                 )}
-              </main>
-            </div>
+      </main>
+    </div>
           );
         }
 

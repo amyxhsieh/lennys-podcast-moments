@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import TranscriptPanel from '@/app/components/TranscriptPanel';
 import LogoSpark from '@/app/components/LogoSpark';
 import { secondsToTimestamp } from '@/app/utils/timestamp';
@@ -578,20 +579,22 @@ export default function EpisodeDetailPage() {
           </div>
         </aside>
         {/* Logo in bottom-right corner */}
-        <div 
-          className={styles.bottomLogo}
-          onMouseEnter={() => setIsLogoHovered(true)}
-          onMouseLeave={() => setIsLogoHovered(false)}
-        >
-          <LogoSpark isHovered={isLogoHovered} />
-          <Image
-            src="/Lenny Podcast Logo.webp"
-            alt="Lenny's Podcast"
-            width={80}
-            height={80}
-            className={styles.brandLogo}
-          />
-        </div>
+        <Link href="/">
+          <div 
+            className={styles.bottomLogo}
+            onMouseEnter={() => setIsLogoHovered(true)}
+            onMouseLeave={() => setIsLogoHovered(false)}
+          >
+            <LogoSpark isHovered={isLogoHovered} />
+            <Image
+              src="/lennypodcastlogo.png"
+              alt="Lenny's Podcast"
+              width={64}
+              height={64}
+              className={styles.brandLogo}
+            />
+          </div>
+        </Link>
       </div>
     </div>
   );
