@@ -199,9 +199,17 @@ export default function SparkAnimation() {
 
         // Draw particle based on type - less flicker, more illustrative
         if (p.life > 0) {
-          const alpha = Math.min(p.life, 1);
+          // Smooth fade out using ease-out cubic function for smoother opacity transition
+          const lifeNormalized = Math.max(0, Math.min(p.life, 1));
+          const easeOutCubic = 1 - Math.pow(1 - lifeNormalized, 3); // Smooth ease-out curve
+          const alpha = easeOutCubic;
+          
           const flickerIntensity = 0.9 + Math.sin(timeRef.current * 4 + p.flicker) * 0.1; // Less flicker, slower
-          const size = p.size * (0.6 + p.life * 0.4) * flickerIntensity; // More stable size
+          
+          // Gradually reduce size during fade out for smoother tail effect
+          // Size starts at full, gradually reduces to 0.5x as it fades
+          const sizeMultiplier = 0.5 + (lifeNormalized * 0.5); // Smooth size reduction from 1.0 to 0.5
+          const size = p.size * sizeMultiplier * flickerIntensity;
 
           if (p.type === 'core') {
             // Bright yellow core - more illustrative, stylized flame shape
