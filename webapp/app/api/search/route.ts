@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { hybridSearch } from '@/app/utils/search';
+import { hybridSearchWithRag } from '@/app/utils/search-server';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,15 +27,20 @@ export async function GET(request: NextRequest) {
 
     const episodes = JSON.parse(fs.readFileSync(episodesPath, 'utf-8'));
     const keywords = JSON.parse(fs.readFileSync(keywordsPath, 'utf-8'));
-    
+
     // Load transcript index if available (for fallback search)
     let transcriptIndex: Record<string, any[]> | undefined;
     if (fs.existsSync(transcriptIndexPath)) {
       transcriptIndex = JSON.parse(fs.readFileSync(transcriptIndexPath, 'utf-8'));
     }
 
-    // Perform hybrid search (includes transcript search as fallback)
-    const results = hybridSearch(query, keywords, episodes, transcriptIndex);
+    // Hybrid search: keywords + full-text + transcript + local vectors (when available)
+    const results = await hybridSearchWithRag(
+      query,
+      keywords,
+      episodes,
+      transcriptIndex
+    );
 
     return NextResponse.json(results);
   } catch (error) {

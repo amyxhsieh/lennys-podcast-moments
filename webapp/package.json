@@ -8,13 +8,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "build-data": "node ../scripts/build-data.js"
+    "build-data": "node ../scripts/build-data.js",
+    "build:rag": "node ../scripts/build-embeddings.js",
+    "build:all": "npm run build-data && npm run build:rag"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
     "next": "16.1.3",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",

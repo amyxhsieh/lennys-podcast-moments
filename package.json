@@ -1,0 +1,16 @@
+{
+  "name": "lennys-podcast-moments",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix webapp",
+    "build": "npm run build --prefix webapp",
+    "start": "npm run start --prefix webapp",
+    "lint": "npm run lint --prefix webapp",
+    "build-data": "node scripts/build-data.js",
+    "build:rag": "node scripts/build-embeddings.js",
+    "build:all": "npm run build-data && npm run build:rag"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^1.6.1"
+  }
+}

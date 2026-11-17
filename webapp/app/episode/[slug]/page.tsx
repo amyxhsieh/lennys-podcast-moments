@@ -8,7 +8,11 @@ import TranscriptPanel from '@/app/components/TranscriptPanel';
 import LogoSpark from '@/app/components/LogoSpark';
 import { secondsToTimestamp } from '@/app/utils/timestamp';
 import { formatDescription } from '@/app/utils/formatDescription';
-import { generateClipsFromTranscript } from '@/app/utils/search';
+import {
+  clipMatchesQuery,
+  expandQueryTerms,
+  generateClipsFromTranscript,
+} from '@/app/utils/search';
 import styles from './page.module.css';
 
 interface Episode {
@@ -31,6 +35,27 @@ interface Clip {
   previewText?: string;
 }
 
+interface RelatedEpisode {
+  slug: string;
+  guest: string;
+  title: string;
+  videoId: string;
+  score: number;
+}
+
+interface RelatedClip {
+  episodeSlug: string;
+  guest: string;
+  videoId: string;
+  startSeconds: number;
+  endSeconds: number;
+  startTimestamp: string;
+  endTimestamp: string;
+  previewText: string;
+  score: number;
+  keyword?: string;
+}
+
 export default function EpisodeDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -49,6 +74,8 @@ export default function EpisodeDetailPage() {
   const [showReadMore, setShowReadMore] = useState(false);
   const [clipNotification, setClipNotification] = useState<string | null>(null);
   const [isLogoHovered, setIsLogoHovered] = useState(false);
+  const [relatedEpisodes, setRelatedEpisodes] = useState<RelatedEpisode[]>([]);
+  const [relatedClips, setRelatedClips] = useState<RelatedClip[]>([]);
   const playerRef = useRef<any>(null);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   const timeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -125,64 +152,106 @@ export default function EpisodeDetailPage() {
         const episodeClips: Clip[] = [];
         
         if (topicParam) {
-          // Filter by specific topic/keyword
           const topicLower = topicParam.toLowerCase().trim();
+          const expanded = expandQueryTerms(topicLower);
           console.log('🔍 Searching for topic:', topicParam, 'in episode:', slug);
-          
-          // Find matching keywords (by name or slug)
+
           const matchingKeywords: string[] = [];
           for (const keywordData of keywordsArray) {
             const keywordName = (keywordData.name || '').toLowerCase();
-            const keywordSlug = (keywordData.slug || '').toLowerCase();
-            
-            // Match if topic matches keyword name or slug
-            const nameMatch = keywordName.includes(topicLower) || topicLower.includes(keywordName);
-            const slugMatch = keywordSlug.includes(topicLower) || topicLower.includes(keywordSlug);
-            
-            if (nameMatch || slugMatch) {
-              console.log('✅ Matched keyword:', keywordData.slug, 'name:', keywordData.name);
-              matchingKeywords.push(keywordData.name.toLowerCase());
+            if (
+              expanded.some((term) => clipMatchesQuery(keywordName, term)) ||
+              clipMatchesQuery(keywordName, topicLower)
+            ) {
+              matchingKeywords.push(keywordData.name);
             }
           }
-          
+
           console.log('📋 Found', matchingKeywords.length, 'matching keywords:', matchingKeywords);
-          
-          // Filter clips: find clips for this episode that match the topic keywords
+
           for (const clip of clipsArray) {
-            // Check if clip is for this episode and matches one of the keywords
-            if (clip.episodeSlug === slug) {
-              const clipKeyword = (clip.keyword || '').toLowerCase();
-              const matches = matchingKeywords.some(keyword => 
-                clipKeyword.includes(keyword) || keyword.includes(clipKeyword)
-              );
-              
-              if (matches) {
-                // Convert clip format to our Clip interface
-                episodeClips.push({
-                  startSeconds: clip.startSeconds || clip.startTime || 0,
-                  endSeconds: clip.endSeconds || clip.endTime || 0,
-                  startTimestamp: clip.startTimestamp || secondsToTimestamp(clip.startSeconds || clip.startTime || 0),
-                  endTimestamp: clip.endTimestamp || secondsToTimestamp(clip.endSeconds || clip.endTime || 0),
-                  previewText: clip.previewText || clip.preview || ''
-                });
-              }
+            if (
+              clip.episodeSlug === slug &&
+              clipMatchesQuery(clip.keyword || '', topicLower, matchingKeywords)
+            ) {
+              episodeClips.push({
+                startSeconds: clip.startSeconds || clip.startTime || 0,
+                endSeconds: clip.endSeconds || clip.endTime || 0,
+                startTimestamp:
+                  clip.startTimestamp ||
+                  secondsToTimestamp(clip.startSeconds || clip.startTime || 0),
+                endTimestamp:
+                  clip.endTimestamp ||
+                  secondsToTimestamp(clip.endSeconds || clip.endTime || 0),
+                previewText: clip.previewText || clip.preview || '',
+              });
             }
           }
-          
-          // If no pre-generated clips found, try transcript search
+
           if (episodeClips.length === 0 && transcriptIndexData[slug]) {
             console.log('📝 No pre-generated clips found, searching transcript...');
-            const generatedClips = generateClipsFromTranscript(topicParam, slug, transcriptIndexData);
+            const generatedClips = generateClipsFromTranscript(
+              topicParam,
+              slug,
+              transcriptIndexData,
+              matchingKeywords
+            );
             console.log('🎬 Generated', generatedClips.length, 'clips from transcript');
-            
+
             for (const clip of generatedClips) {
               episodeClips.push({
                 startSeconds: clip.startSeconds,
                 endSeconds: clip.endSeconds,
                 startTimestamp: clip.startTimestamp,
                 endTimestamp: clip.endTimestamp,
-                previewText: clip.previewText || ''
+                previewText: clip.previewText || '',
               });
+            }
+          }
+
+          // Any clip on episode as last resort so detail page isn't empty
+          if (episodeClips.length === 0) {
+            for (const clip of clipsArray) {
+              if (clip.episodeSlug === slug) {
+                episodeClips.push({
+                  startSeconds: clip.startSeconds || 0,
+                  endSeconds: clip.endSeconds || 0,
+                  startTimestamp:
+                    clip.startTimestamp ||
+                    secondsToTimestamp(clip.startSeconds || 0),
+                  endTimestamp:
+                    clip.endTimestamp || secondsToTimestamp(clip.endSeconds || 0),
+                  previewText: clip.previewText || '',
+                });
+              }
+            }
+          }
+
+          // RAG hybrid search clips as additional fallback
+          if (episodeClips.length === 0) {
+            try {
+              const searchRes = await fetch(
+                `/api/search?q=${encodeURIComponent(topicParam)}`
+              );
+              if (searchRes.ok) {
+                const searchResults = await searchRes.json();
+                const match = Array.isArray(searchResults)
+                  ? searchResults.find((r: any) => r.episodeSlug === slug)
+                  : null;
+                if (match?.ragClips?.length) {
+                  for (const clip of match.ragClips) {
+                    episodeClips.push({
+                      startSeconds: clip.startSeconds,
+                      endSeconds: clip.endSeconds,
+                      startTimestamp: clip.startTimestamp,
+                      endTimestamp: clip.endTimestamp,
+                      previewText: clip.previewText || '',
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('RAG clip fallback failed', e);
             }
           }
           
@@ -418,6 +487,45 @@ export default function EpisodeDetailPage() {
     }
   };
 
+  // Load related episodes + clips
+  useEffect(() => {
+    if (!slug) return;
+
+    async function loadRelated() {
+      try {
+        const start = currentClip?.startSeconds ?? Number(clipStartParam) ?? 0;
+        const topicQs = topicParam
+          ? `&topic=${encodeURIComponent(topicParam)}`
+          : '';
+        const keywordQs = topicParam
+          ? `&keyword=${encodeURIComponent(topicParam)}`
+          : '';
+
+        const [episodesRes, clipsRes] = await Promise.all([
+          fetch(`/api/related/episodes?slug=${encodeURIComponent(slug)}${topicQs}`),
+          fetch(
+            `/api/related/clips?slug=${encodeURIComponent(slug)}&start=${start}${keywordQs}${topicQs}`
+          ),
+        ]);
+
+        if (episodesRes.ok) {
+          const data = await episodesRes.json();
+          setRelatedEpisodes(Array.isArray(data.related) ? data.related : []);
+        }
+        if (clipsRes.ok) {
+          const data = await clipsRes.json();
+          setRelatedClips(Array.isArray(data.related) ? data.related : []);
+        }
+      } catch (err) {
+        console.warn('Failed to load related content', err);
+      }
+    }
+
+    loadRelated();
+    // Re-fetch related clips when the active clip changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, topicParam, currentClip?.startSeconds, clipStartParam]);
+
   if (isLoading) {
     return (
       <div className={styles.page}>
@@ -577,6 +685,75 @@ export default function EpisodeDetailPage() {
               Watch full episode on YouTube →
             </a>
           </div>
+
+          {relatedClips.length > 0 && (
+            <div className={styles.relatedSection}>
+              <h3 className={styles.relatedTitle}>More moments like this</h3>
+              <ul className={styles.relatedList}>
+                {relatedClips.slice(0, 5).map((clip) => {
+                  const hrefParams = new URLSearchParams();
+                  hrefParams.set('clip', String(clip.startSeconds));
+                  if (topicParam) hrefParams.set('topic', topicParam);
+                  if (fromParam) hrefParams.set('from', fromParam);
+                  return (
+                    <li key={`${clip.episodeSlug}-${clip.startSeconds}`}>
+                      <Link
+                        href={`/episode/${clip.episodeSlug}?${hrefParams.toString()}`}
+                        className={styles.relatedItem}
+                      >
+                        <span className={styles.relatedGuest}>{clip.guest}</span>
+                        <span className={styles.relatedMeta}>
+                          {clip.startTimestamp}
+                          {clip.keyword ? ` · ${clip.keyword}` : ''}
+                        </span>
+                        {clip.previewText && (
+                          <span className={styles.relatedPreview}>
+                            {clip.previewText.slice(0, 100)}
+                            {clip.previewText.length > 100 ? '…' : ''}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {relatedEpisodes.length > 0 && (
+            <div className={styles.relatedSection}>
+              <h3 className={styles.relatedTitle}>Related episodes</h3>
+              <ul className={styles.relatedList}>
+                {relatedEpisodes.slice(0, 5).map((ep) => {
+                  const hrefParams = new URLSearchParams();
+                  if (topicParam) hrefParams.set('topic', topicParam);
+                  if (fromParam) hrefParams.set('from', fromParam);
+                  const qs = hrefParams.toString();
+                  return (
+                    <li key={ep.slug}>
+                      <Link
+                        href={`/episode/${ep.slug}${qs ? `?${qs}` : ''}`}
+                        className={styles.relatedItem}
+                      >
+                        <div className={styles.relatedThumbWrap}>
+                          <Image
+                            src={`https://img.youtube.com/vi/${ep.videoId}/mqdefault.jpg`}
+                            alt=""
+                            width={80}
+                            height={45}
+                            unoptimized
+                            className={styles.relatedThumb}
+                          />
+                        </div>
+                        <span className={styles.relatedGuest}>{ep.guest}</span>
+                        <span className={styles.relatedMeta}>{ep.title}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </aside>
         {/* Logo in bottom-right corner */}
         <Link href="/">

@@ -8,7 +8,17 @@ Lenny's Podcast features interviews with world-class product leaders and growth 
 
 ## Quick Start
 
-**Browse by topic:** Start with [index/README.md](index/README.md) to explore episodes by topic.
+**Web app (moments search):** see [webapp/README.md](webapp/README.md).
+
+```bash
+cd webapp && npm install
+cp webapp/.env.example webapp/.env.local   # set OPENAI_API_KEY for semantic search
+npm run build-data                         # from repo root
+npm run build:rag                          # optional; needs OPENAI_API_KEY
+npm run dev
+```
+
+**Browse by topic:** Start with [index/README.md](index/README.md).
 
 **Search transcripts:**
 ```bash
@@ -18,16 +28,21 @@ grep -r "product-market fit" episodes/
 ## Repository Structure
 
 ```
-├── episodes/                    # 269 episode transcripts
+├── episodes/                    # Episode transcripts (~299)
 │   └── {guest-name}/
 │       └── transcript.md
 ├── index/                       # AI-generated topic index
-│   ├── README.md                # Main entry point
-│   ├── product-management.md    # Episodes about product management
-│   ├── leadership.md            # Episodes about leadership
-│   └── ...                      # 50+ topic files
+│   ├── README.md
+│   └── ...                      # topic keyword files
+├── webapp/                      # Next.js moments search app
+│   ├── app/                     # UI + API (search, related, episodes)
+│   ├── data/rag/                # local static embeddings (gitignored)
+│   └── public/data/             # generated JSON for the UI
 └── scripts/
-    └── build-index.sh           # Script to regenerate index
+    ├── build-index.sh           # regenerate topic index (Claude CLI)
+    ├── build-data.js            # episodes/keywords/clips/transcript-index
+    ├── build-embeddings.js      # local RAG vectors (OpenAI by default)
+    └── lib/embed.js             # embed providers for the build script
 ```
 
 ## Episode Format
@@ -102,7 +117,7 @@ print(f"Title: {metadata['title']}")
 
 ## Episode Count
 
-This archive contains **269 transcripts** from Lenny's Podcast episodes.
+This archive contains **~299 transcripts** from Lenny's Podcast episodes (see `webapp/public/data/stats.json` after a data build).
 
 ## Data Sources
 

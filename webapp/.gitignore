@@ -32,6 +32,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# Local RAG index binaries / large artifacts (rebuild with build-embeddings.js)
+/data/rag/chunks.json
+/data/rag/embeddings.f32
+/data/rag/episode-embeddings.json
+/data/rag/related-episodes.json
+/data/rag/manifest.json
 
 # vercel
 .vercel

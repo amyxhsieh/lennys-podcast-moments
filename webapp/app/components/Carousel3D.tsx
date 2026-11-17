@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import GuestCard from './GuestCard';
-import { generateClipsFromTranscript } from '../utils/search';
+import { clipMatchesQuery, generateClipsFromTranscript } from '../utils/search';
 import styles from './Carousel3D.module.css';
 
 interface Episode {
@@ -12,6 +12,7 @@ interface Episode {
   videoId: string;
   description?: string;
   keywords?: string[];
+  matchedKeywords?: string[];
 }
 
 interface Clip {
@@ -28,9 +29,11 @@ interface Carousel3DProps {
   transcriptIndex?: Record<string, any[]>;
   searchQuery?: string;
   initialEpisodeSlug?: string; // Episode to center on initially
+  /** RAG clips keyed by episode slug from hybrid search */
+  ragClipsBySlug?: Record<string, Clip[]>;
 }
 
-export default function Carousel3D({ episodes, clips, transcriptIndex = {}, searchQuery = '', initialEpisodeSlug }: Carousel3DProps) {
+export default function Carousel3D({ episodes, clips, transcriptIndex = {}, searchQuery = '', initialEpisodeSlug, ragClipsBySlug = {} }: Carousel3DProps) {
   // Find initial index based on episode slug if provided
   const getInitialIndex = () => {
     if (initialEpisodeSlug) {
@@ -43,20 +46,25 @@ export default function Carousel3D({ episodes, clips, transcriptIndex = {}, sear
   const [currentIndex, setCurrentIndex] = useState(getInitialIndex());
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Get clips for each episode (pre-generated or generate from transcript)
+  // Get clips for each episode (RAG, pre-generated, or generate from transcript)
   const getClipsForEpisode = useCallback((episodeSlug: string): Clip[] => {
     if (!episodeSlug || !searchQuery) return [];
+
+    const episode = episodes.find((ep) => ep.slug === episodeSlug);
+    const matchedKeywords = episode?.matchedKeywords || [];
+
+    // Prefer RAG clips from hybrid/vector search
+    const ragClips = ragClipsBySlug[episodeSlug];
+    if (ragClips && ragClips.length > 0) {
+      return [...ragClips].sort((a, b) => a.startSeconds - b.startSeconds);
+    }
     
-    const queryLower = searchQuery.toLowerCase().trim();
-    
-    // First, try to find pre-generated clips
+    // Pre-generated clips via query + synonyms + matched tags
     const preGeneratedClips = clips.filter((clip: any) => {
       if (clip.episodeSlug !== episodeSlug) return false;
-      const clipKeyword = (clip.keyword || '').toLowerCase();
-      return clipKeyword.includes(queryLower) || queryLower.includes(clipKeyword);
+      return clipMatchesQuery(clip.keyword || '', searchQuery, matchedKeywords);
     });
     
-    // If pre-generated clips exist, use them
     if (preGeneratedClips.length > 0) {
       const mappedClips = preGeneratedClips.map(clip => ({
         startSeconds: clip.startSeconds || clip.startTime || 0,
@@ -65,26 +73,44 @@ export default function Carousel3D({ episodes, clips, transcriptIndex = {}, sear
         endTimestamp: clip.endTimestamp || '',
         previewText: clip.previewText || clip.preview || ''
       }));
-      // Sort by start time to ensure first clip is chronologically first
       return mappedClips.sort((a, b) => a.startSeconds - b.startSeconds);
     }
     
-    // Otherwise, generate clips from transcript if available
+    // Generate from transcript (query + synonyms)
     if (transcriptIndex[episodeSlug]) {
-      const generatedClips = generateClipsFromTranscript(searchQuery, episodeSlug, transcriptIndex);
-      const mappedClips = generatedClips.map(clip => ({
-        startSeconds: clip.startSeconds,
-        endSeconds: clip.endSeconds,
-        startTimestamp: clip.startTimestamp,
-        endTimestamp: clip.endTimestamp,
-        previewText: clip.previewText || ''
-      }));
-      // Sort by start time to ensure first clip is chronologically first
-      return mappedClips.sort((a, b) => a.startSeconds - b.startSeconds);
+      const generatedClips = generateClipsFromTranscript(
+        searchQuery,
+        episodeSlug,
+        transcriptIndex,
+        matchedKeywords
+      );
+      if (generatedClips.length > 0) {
+        const mappedClips = generatedClips.map(clip => ({
+          startSeconds: clip.startSeconds,
+          endSeconds: clip.endSeconds,
+          startTimestamp: clip.startTimestamp,
+          endTimestamp: clip.endTimestamp,
+          previewText: clip.previewText || ''
+        }));
+        return mappedClips.sort((a, b) => a.startSeconds - b.startSeconds);
+      }
     }
-    
-    return [];
-  }, [clips, transcriptIndex, searchQuery]);
+
+    // Last resort: any clip on this episode so the card remains playable
+    const anyClips = clips
+      .filter((clip: any) => clip.episodeSlug === episodeSlug)
+      .map((clip) => ({
+        startSeconds: clip.startSeconds || clip.startTime || 0,
+        endSeconds: clip.endSeconds || clip.endTime || 0,
+        startTimestamp: clip.startTimestamp || '',
+        endTimestamp: clip.endTimestamp || '',
+        previewText: clip.previewText || clip.preview || '',
+      }))
+      .sort((a, b) => a.startSeconds - b.startSeconds)
+      .slice(0, 3);
+
+    return anyClips;
+  }, [clips, transcriptIndex, searchQuery, ragClipsBySlug, episodes]);
 
   const handlePrev = () => {
     setCurrentIndex((prev) => (prev - 1 + episodes.length) % episodes.length);

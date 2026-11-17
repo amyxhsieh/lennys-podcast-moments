@@ -1,5 +1,6 @@
 /**
- * Search utilities for hybrid keyword + full-text search
+ * Client-safe search utilities (keyword / full-text / transcript).
+ * Server RAG hybrid lives in search-server.ts — do not import fs/rag here.
  */
 
 export interface SearchResult {
@@ -8,8 +9,84 @@ export interface SearchResult {
   title: string;
   videoId: string;
   score: number;
-  matchType: 'keyword' | 'fulltext' | 'hybrid' | 'transcript';
+  matchType: 'keyword' | 'fulltext' | 'hybrid' | 'transcript' | 'vector';
   matchedKeywords?: string[];
+  /** Top clips derived from RAG chunk hits (when available) */
+  ragClips?: Array<{
+    startSeconds: number;
+    endSeconds: number;
+    startTimestamp: string;
+    endTimestamp: string;
+    previewText: string;
+    score: number;
+  }>;
+}
+
+/**
+ * Related terms so queries like "user research" can match "customer research" clips/tags.
+ */
+const QUERY_SYNONYMS: Record<string, string[]> = {
+  'user research': ['customer research', 'user experience', 'research', 'usability'],
+  'user testing': ['user experience', 'usability', 'a/b testing', 'experimentation', 'testing'],
+  'usability testing': ['user testing', 'user experience', 'usability'],
+  'ux research': ['user research', 'customer research', 'user experience'],
+  'customer interviews': ['customer research', 'user research', 'user experience'],
+};
+
+/**
+ * Expand a query into phrases useful for keyword + clip matching.
+ */
+export function expandQueryTerms(
+  query: string,
+  matchedKeywords: string[] = []
+): string[] {
+  const queryLower = query.toLowerCase().trim();
+  const terms = new Set<string>([queryLower]);
+
+  for (const kw of matchedKeywords) {
+    if (kw) terms.add(kw.toLowerCase());
+  }
+
+  for (const [key, syns] of Object.entries(QUERY_SYNONYMS)) {
+    if (
+      queryLower === key ||
+      queryLower.includes(key) ||
+      key.includes(queryLower)
+    ) {
+      syns.forEach((s) => terms.add(s));
+    }
+    if (syns.some((s) => s === queryLower || queryLower.includes(s))) {
+      terms.add(key);
+      syns.forEach((s) => terms.add(s));
+    }
+  }
+
+  // Individual significant words (skip ultra-generic singles alone except as extras)
+  for (const word of queryLower.split(/[\s-]+/).filter((w) => w.length > 3)) {
+    terms.add(word);
+  }
+
+  return Array.from(terms);
+}
+
+/**
+ * Whether a clip keyword matches the search query (incl. synonyms / matched tags).
+ */
+export function clipMatchesQuery(
+  clipKeyword: string,
+  query: string,
+  matchedKeywords: string[] = []
+): boolean {
+  const clipLower = (clipKeyword || '').toLowerCase().trim();
+  if (!clipLower) return false;
+  const terms = expandQueryTerms(query, matchedKeywords);
+  return terms.some(
+    (term) =>
+      clipLower === term ||
+      clipLower.includes(term) ||
+      term.includes(clipLower) ||
+      fuzzyMatch(term, clipLower)
+  );
 }
 
 /**
@@ -24,8 +101,29 @@ export function fuzzyMatch(query: string, keyword: string): boolean {
   
   // Contains match
   if (keywordLower.includes(queryLower) || queryLower.includes(keywordLower)) return true;
+
+  // Shared significant words (e.g. "user research" ↔ "customer research")
+  const queryWords = queryLower.split(/[\s-]+/).filter((w) => w.length > 2);
+  const keywordWords = keywordLower.split(/[\s-]+/).filter((w) => w.length > 2);
+  if (queryWords.length && keywordWords.length) {
+    const shared = queryWords.filter((qw) =>
+      keywordWords.some((kw) => kw === qw || kw.includes(qw) || qw.includes(kw))
+    );
+    // Require at least one strong shared word; if both multi-word, prefer 1+ overlap
+    if (shared.length >= 1 && (queryWords.length === 1 || keywordWords.length === 1 || shared.length >= 1)) {
+      // Avoid matching only on very generic words alone when both sides are multi-word
+      const generic = new Set(['user', 'product', 'team', 'company', 'work']);
+      const strong = shared.filter((w) => !generic.has(w));
+      if (strong.length > 0) return true;
+      if (shared.length >= 2) return true;
+      // "user *" ↔ "user *" still useful
+      if (shared.includes('user') && queryWords.length > 1 && keywordWords.length > 1) {
+        return true;
+      }
+    }
+  }
   
-  // Word boundary match
+  // Word boundary / prefix match
   const words = keywordLower.split(/[\s-]+/);
   return words.some(word => word.startsWith(queryLower) || queryLower.startsWith(word));
 }
@@ -67,12 +165,19 @@ export function searchByKeyword(
   const results: SearchResult[] = [];
   const queryLower = query.toLowerCase().trim();
   
-  // Find matching keywords
+  // Find matching keywords (incl. synonyms like user research → customer research)
+  const expanded = expandQueryTerms(query);
   const matchingKeywords: string[] = [];
   for (const [keywordSlug, keywordData] of Object.entries(keywords)) {
-    if (fuzzyMatch(query, keywordData.name) || fuzzyMatch(query, keywordSlug)) {
-      matchingKeywords.push(keywordSlug);
-    }
+    const name = keywordData.name || '';
+    const hit = expanded.some(
+      (term) =>
+        fuzzyMatch(term, name) ||
+        fuzzyMatch(term, keywordSlug) ||
+        fuzzyMatch(query, name) ||
+        fuzzyMatch(query, keywordSlug)
+    );
+    if (hit) matchingKeywords.push(keywordSlug);
   }
   
   if (matchingKeywords.length === 0) return results;
@@ -204,93 +309,93 @@ export function searchByTranscript(
   return results;
 }
 
+function finalizeTranscriptClip(
+  currentClip: { start: number; end: number; mentions: any[] },
+  query: string,
+  episodeSlug: string
+) {
+  // Single mentions have zero span — pad to a watchable window
+  const paddedEnd = Math.max(currentClip.end + 90, currentClip.start + 120);
+  const endSeconds = Math.min(paddedEnd, currentClip.start + 600);
+  return {
+    startSeconds: Math.max(0, currentClip.start - 15),
+    endSeconds,
+    startTimestamp: formatTimestamp(Math.max(0, currentClip.start - 15)),
+    endTimestamp: formatTimestamp(endSeconds),
+    mentionCount: currentClip.mentions.length,
+    previewText: currentClip.mentions[0].text.substring(0, 200),
+    keyword: query,
+    episodeSlug,
+  };
+}
+
 /**
  * Generate clips from transcript matches for a query
  */
 export function generateClipsFromTranscript(
   query: string,
   episodeSlug: string,
-  transcriptIndex: Record<string, any[]>
+  transcriptIndex: Record<string, any[]>,
+  matchedKeywords: string[] = []
 ): any[] {
   const segments = transcriptIndex[episodeSlug];
   if (!segments || segments.length === 0) return [];
-  
-  const queryLower = query.toLowerCase().trim();
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-  
-  // Find matching segments
+
+  const terms = expandQueryTerms(query, matchedKeywords).filter(
+    (t) => t.length > 2
+  );
+
+  // Find matching segments using query + synonyms
   const mentions: any[] = [];
+  const seen = new Set<number>();
   for (const segment of segments) {
     const text = segment.text || '';
-    // Check if query appears in segment
-    if (text.includes(queryLower) || queryWords.every(word => text.includes(word))) {
+    const hit = terms.some((term) => {
+      if (text.includes(term)) return true;
+      const words = term.split(/\s+/).filter((w) => w.length > 2);
+      return words.length > 0 && words.every((w) => text.includes(w));
+    });
+    if (hit && !seen.has(segment.timestampSeconds)) {
+      seen.add(segment.timestampSeconds);
       mentions.push({
         timestamp: segment.timestamp,
         timestampSeconds: segment.timestampSeconds,
         text: segment.text,
-        speaker: segment.speaker
+        speaker: segment.speaker,
       });
     }
   }
-  
+
   if (mentions.length === 0) return [];
-  
+
   // Group mentions into clips (similar to build-data.js logic)
   const clips: any[] = [];
   let currentClip = {
     start: mentions[0].timestampSeconds,
     end: mentions[0].timestampSeconds,
-    mentions: [mentions[0]]
+    mentions: [mentions[0]],
   };
-  
+
   for (let i = 1; i < mentions.length; i++) {
     const mention = mentions[i];
     const timeSinceLastMention = mention.timestampSeconds - currentClip.end;
-    
+
     // If within 3 minutes, merge into current clip
     if (timeSinceLastMention <= 180) {
       currentClip.end = mention.timestampSeconds;
       currentClip.mentions.push(mention);
     } else {
-      // Finalize current clip
-      const clipLength = currentClip.end - currentClip.start;
-      if (clipLength >= 60 && clipLength <= 600) {
-        clips.push({
-          startSeconds: currentClip.start,
-          endSeconds: Math.min(currentClip.end + 60, currentClip.start + 600),
-          startTimestamp: formatTimestamp(currentClip.start),
-          endTimestamp: formatTimestamp(Math.min(currentClip.end + 60, currentClip.start + 600)),
-          mentionCount: currentClip.mentions.length,
-          previewText: currentClip.mentions[0].text.substring(0, 200),
-          keyword: query,
-          episodeSlug: episodeSlug
-        });
-      }
-      
-      // Start new clip
+      clips.push(finalizeTranscriptClip(currentClip, query, episodeSlug));
       currentClip = {
         start: mention.timestampSeconds,
         end: mention.timestampSeconds,
-        mentions: [mention]
+        mentions: [mention],
       };
     }
   }
-  
-  // Add final clip
-  const clipLength = currentClip.end - currentClip.start;
-  if (clipLength >= 60 && clipLength <= 600) {
-    clips.push({
-      startSeconds: currentClip.start,
-      endSeconds: Math.min(currentClip.end + 60, currentClip.start + 600),
-      startTimestamp: formatTimestamp(currentClip.start),
-      endTimestamp: formatTimestamp(Math.min(currentClip.end + 60, currentClip.start + 600)),
-      mentionCount: currentClip.mentions.length,
-      previewText: currentClip.mentions[0].text.substring(0, 200),
-      keyword: query,
-      episodeSlug: episodeSlug
-    });
-  }
-  
+
+  clips.push(finalizeTranscriptClip(currentClip, query, episodeSlug));
+
   // Score clips with content relevancy heuristics
   return scoreClipsWithRelevancy(clips, segments, query).slice(0, 5); // Top 5 clips
 }
@@ -462,13 +567,13 @@ export function hybridSearch(
     }
   }
   
-  // If no keyword matches and transcript index available, search transcripts
-  if (keywordResults.length === 0 && transcriptIndex) {
+  // Always search transcripts when index is available (not only on keyword miss)
+  if (transcriptIndex) {
     const transcriptResults = searchByTranscript(query, episodes, transcriptIndex);
     for (const result of transcriptResults) {
       const existing = resultMap.get(result.episodeSlug);
       if (existing) {
-        existing.score += result.score * 0.5; // Lower weight for transcript-only matches
+        existing.score += result.score * 0.5;
         existing.matchType = 'hybrid';
       } else {
         result.matchType = 'transcript';

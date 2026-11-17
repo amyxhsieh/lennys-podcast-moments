@@ -1,157 +1,132 @@
 # Lenny's Podcast Moments Web App
 
-A searchable web application that helps users discover and explore meaningful moments from Lenny's Podcast (269 episodes).
+Searchable web app for discovering moments from Lenny's Podcast (~299 episodes).
 
 ## Features
 
-- **Search Interface**: Search by keywords or full-text across all episodes
-- **3D Carousel**: Browse search results in an interactive 3D carousel
-- **Video Previews**: Hover over cards to see muted video previews (YouTube-style)
-- **Clip Detail View**: Watch clips with synced transcripts
-- **Smart Clip Extraction**: Automatically extracts relevant clips from episodes based on keywords
+- **Hybrid search**: keywords + full-text + transcript + optional local vector RAG
+- **Query synonyms**: e.g. `user research` → customer research / UX; `user testing` → UX / usability / A/B testing
+- **3D carousel** of matching episodes with clip previews
+- **Clip detail view** with synced transcript
+- **Related episodes / moments** on the episode page
+- **Graceful fallback**: without OpenAI / RAG files, keyword + transcript search still works
 
 ## Setup
 
-### 1. Install Dependencies
+### 1. Install
 
 ```bash
-cd webapp
-npm install
+# From repo root
+cd webapp && npm install && cd ..
 ```
 
-### 2. Build Data Files
+Root scripts also work: `npm run dev`, `npm run build-data`, `npm run build:rag`.
 
-Before running the app, you need to generate the data files from your episode transcripts:
+### 2. Environment (OpenAI)
+
+Copy `.env.example` → `.env.local`:
 
 ```bash
-# From the project root
+EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_EMBED_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=512
+```
+
+**Gemini is not used.** Optional alternative: `EMBEDDING_PROVIDER=ollama` (local only).
+
+For production (Vercel), set the same `OPENAI_API_KEY` / `EMBEDDING_PROVIDER` in project env vars.
+
+### 3. Build data files
+
+```bash
+# From repo root
 node scripts/build-data.js
+# or: npm run build-data
 ```
 
-This will:
-- Parse all episode transcripts from `episodes/`
-- Extract clips based on keywords from `index/`
-- Generate JSON files in `webapp/public/data/`:
-  - `episodes.json` - All episode metadata
-  - `keywords.json` - Keyword index
-  - `clips.json` - Auto-extracted clips
-  - `stats.json` - Build statistics
+Outputs in `webapp/public/data/`:
 
-### 3. Run Development Server
+- `episodes.json`, `keywords.json`, `clips.json`
+- `transcript-index.json` (needed for on-the-fly clip generation)
+- `stats.json`
+
+### 4. Build RAG index (semantic search)
 
 ```bash
-cd webapp
-npm run dev
+node scripts/build-embeddings.js
+# or: npm run build:rag
+# or: npm run build:all   # data + rag
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Writes API-only files under `webapp/data/rag/` (gitignored binaries):
 
-## Project Structure
+- `chunks.json`, `embeddings.f32`, `manifest.json`
+- `episode-embeddings.json`, `related-episodes.json`
+
+Idempotent when chunk content hash is unchanged. First build calls OpenAI once per chunk; each search embeds the query once.
+
+### 5. Run
+
+```bash
+npm run dev
+# or: cd webapp && npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Project structure
 
 ```
 webapp/
 ├── app/
-│   ├── api/              # API routes
-│   │   ├── search/       # Search endpoint
-│   │   └── episodes/     # Episode detail endpoint
-│   ├── components/       # React components
-│   │   ├── Carousel3D.tsx
-│   │   ├── GuestCard.tsx
-│   │   ├── SearchInput.tsx
-│   │   ├── KeywordTags.tsx
-│   │   └── TranscriptPanel.tsx
-│   ├── episode/[slug]/   # Episode detail page
-│   ├── styles/           # Design system
-│   ├── utils/            # Utility functions
-│   └── page.tsx          # Landing/search page
-├── public/
-│   └── data/             # Generated JSON data files
-└── types/                # TypeScript definitions
+│   ├── api/
+│   │   ├── search/           # hybridSearchWithRag
+│   │   ├── related/episodes/
+│   │   ├── related/clips/
+│   │   └── episodes/
+│   ├── components/
+│   ├── episode/[slug]/       # detail + related UI
+│   ├── utils/
+│   │   ├── search.ts         # client-safe search + synonyms
+│   │   ├── search-server.ts  # server RAG hybrid (do not import in client)
+│   │   ├── rag.ts            # load local vectors (server-only)
+│   │   └── embed.ts          # OpenAI / ollama / HF (server-only)
+│   └── page.tsx
+├── data/rag/                 # local static vectors (API-only)
+├── public/data/              # generated JSON for the UI
+└── .env.local                # secrets (gitignored)
 ```
 
-## Design System
+Repo scripts:
 
-- **Colors**: White background (#FFFFFF), text (#222222), orange accents (#F7881D, #FFDFC8, #FFF4EA)
-- **Typography**: 
-  - Headings: Bricolage Grotesque (bold)
-  - Body: SF Pro Display / system fonts
-- **All text**: Sentence case
+- `scripts/build-data.js` — episodes, keywords, clips, transcript-index
+- `scripts/build-embeddings.js` — chunk + embed + related-episodes
+- `scripts/lib/embed.js` — shared embed providers for the build script
 
-## Key Components
+## API
 
-### Search Interface
-- Centered logo and tagline
-- Search input with debounced search
-- Popular keyword tags
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/search?q=` | Hybrid search (keyword + full-text + transcript + vectors) |
+| `GET /api/related/episodes?slug=&topic=` | Related episodes |
+| `GET /api/related/clips?slug=&start=&keyword=` | Similar moments |
+| `GET /api/episodes/[slug]` | Episode details |
 
-### 3D Carousel
-- Horizontal scrollable carousel
-- 3D perspective transforms
-- Center card auto-focuses
-- Mouse/touch drag support
+## Search behavior notes
 
-### Guest Cards
-- YouTube thumbnail
-- Guest name and episode title
-- Clip count badge
-- Hover: Muted video preview with unmute button
+- Synonyms expand queries so sparse tags (e.g. no exact `user-research` keyword) still surface related episodes/clips.
+- UI keeps API matches even when pre-generated clips are thin; clips can come from synonyms, transcript generation, or any episode clip as fallback.
+- `transcript-index.json` must exist for client-side clip generation — run `build-data.js` if searches look empty.
 
-### Clip Detail View
-- YouTube embedded player
-- Clip thumbnails (if multiple clips)
-- Synced transcript panel
-- Guest info sidebar
-- Link to full episode
+## Design
 
-## API Endpoints
-
-- `GET /api/search?q={query}` - Hybrid search (keyword + full-text)
-- `GET /api/episodes/[slug]` - Get episode details
-
-## Data Format
-
-### Episodes JSON
-```json
-{
-  "slug": "brian-chesky",
-  "guest": "Brian Chesky",
-  "title": "Brian Chesky's new playbook",
-  "videoId": "4ef0juAMqoE",
-  "youtubeUrl": "https://www.youtube.com/watch?v=...",
-  "publishDate": "2023-11-12",
-  "duration": "1:13:28",
-  "keywords": ["leadership", "product management"]
-}
-```
-
-### Clips JSON
-```json
-{
-  "ai": {
-    "brian-chesky": [
-      {
-        "startSeconds": 300,
-        "endSeconds": 600,
-        "startTimestamp": "00:05:00",
-        "endTimestamp": "00:10:00",
-        "mentionCount": 5,
-        "previewText": "..."
-      }
-    ]
-  }
-}
-```
-
-## Future Enhancements
-
-- AI chat feature (placeholder included)
-- Full transcript parsing for clip detail view
-- User accounts and saved clips
-- Video clip downloads
-- Comments and discussions
+- Colors: white `#FFFFFF`, text `#222222`, orange accents `#F7881D` / `#FFDFC8` / `#FFF4EA`
+- Headings: Bricolage Grotesque; body: system / SF Pro
+- Sentence case
 
 ## Notes
 
-- YouTube autoplay policy: Videos start muted on hover (browser requirement)
-- Clip extraction: Groups keyword mentions within 3-minute windows
-- Max clips: Top 5 clips per episode per keyword (ranked by relevance)
+- YouTube hover previews start muted (browser autoplay policy)
+- Keyword clips: mentions grouped in ~3-minute windows; top 5 per episode/keyword
+- Default embeddings: OpenAI `text-embedding-3-small` at 512 dimensions, stored as local Float32 (no Pinecone/Upstash)

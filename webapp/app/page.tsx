@@ -10,7 +10,7 @@ import Carousel3D from './components/Carousel3D';
 import SparkAnimation from './components/SparkAnimation';
 import VideoMosaicBackground from './components/VideoMosaicBackground';
 import LogoSpark from './components/LogoSpark';
-import { generateClipsFromTranscript } from './utils/search';
+import { clipMatchesQuery, generateClipsFromTranscript } from './utils/search';
 import styles from './page.module.css';
 
 interface Episode {
@@ -36,8 +36,16 @@ interface SearchResult {
   title: string;
   videoId: string;
   score: number;
-  matchType: 'keyword' | 'fulltext' | 'hybrid';
+  matchType: 'keyword' | 'fulltext' | 'hybrid' | 'transcript' | 'vector';
   matchedKeywords?: string[];
+  ragClips?: Array<{
+    startSeconds: number;
+    endSeconds: number;
+    startTimestamp: string;
+    endTimestamp: string;
+    previewText: string;
+    score: number;
+  }>;
 }
 
 function HomeContent() {
@@ -87,34 +95,35 @@ function HomeContent() {
       setIsSearching(true);
       const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const results = await response.json();
-      
-      // Filter results to only include episodes that have matching clips OR can generate valid clips from transcript
-      const queryLower = query.toLowerCase().trim();
-      const filteredResults = results.filter((result: SearchResult) => {
-        // Check if this episode has pre-generated clips matching the search query
-        const episodeClips = currentClips.filter((clip: any) => {
-          if (clip.episodeSlug !== result.episodeSlug) return false;
-          const clipKeyword = (clip.keyword || '').toLowerCase();
-          return clipKeyword.includes(queryLower) || queryLower.includes(clipKeyword);
-        });
-        
-        // If pre-generated clips exist, keep the episode
-        if (episodeClips.length > 0) {
-          return true;
+
+      // Keep API matches. Prefer episodes that can surface a clip, but do not
+      // drop keyword hits when clips are sparse (e.g. "user research").
+      const ranked = (Array.isArray(results) ? results : []).map(
+        (result: SearchResult) => {
+          const matched = result.matchedKeywords || [];
+          const hasRag = !!(result.ragClips && result.ragClips.length > 0);
+          const hasClip = currentClips.some(
+            (clip: any) =>
+              clip.episodeSlug === result.episodeSlug &&
+              clipMatchesQuery(clip.keyword || '', query, matched)
+          );
+          const canGenerate =
+            !!currentTranscriptIndex[result.episodeSlug] &&
+            generateClipsFromTranscript(
+              query,
+              result.episodeSlug,
+              currentTranscriptIndex,
+              matched
+            ).length > 0;
+          return {
+            ...result,
+            score:
+              result.score + (hasRag || hasClip || canGenerate ? 0.25 : 0),
+          };
         }
-        
-        // Otherwise, try to generate clips from transcript - only keep if we can generate at least 1 valid clip
-        if (currentTranscriptIndex[result.episodeSlug]) {
-          const generatedClips = generateClipsFromTranscript(query, result.episodeSlug, currentTranscriptIndex);
-          // Only keep if we can generate at least 1 valid clip
-          return generatedClips.length > 0;
-        }
-        
-        // No clips and no valid transcript clips - filter out
-        return false;
-      });
-      
-      setSearchResults(filteredResults);
+      );
+
+      setSearchResults(ranked.sort((a: SearchResult, b: SearchResult) => b.score - a.score));
       setIsSearching(false);
     } catch (error) {
       console.error('Search failed:', error);
@@ -191,41 +200,6 @@ function HomeContent() {
     handleSearch(keywordName);
   };
 
-          // Re-filter search results when clips or transcript index are loaded (in case search happened before data loaded)
-          useEffect(() => {
-            if (searchQuery && (clips.length > 0 || Object.keys(transcriptIndex).length > 0) && searchResults.length > 0) {
-              const queryLower = searchQuery.toLowerCase().trim();
-              const filteredResults = searchResults.filter((result: SearchResult) => {
-                // Check if this episode has pre-generated clips matching the search query
-                const episodeClips = clips.filter((clip: any) => {
-                  if (clip.episodeSlug !== result.episodeSlug) return false;
-                  const clipKeyword = (clip.keyword || '').toLowerCase();
-                  return clipKeyword.includes(queryLower) || queryLower.includes(clipKeyword);
-                });
-                
-                // If pre-generated clips exist, keep the episode
-                if (episodeClips.length > 0) {
-                  return true;
-                }
-                
-                // Otherwise, try to generate clips from transcript - only keep if we can generate at least 1 valid clip
-                if (transcriptIndex[result.episodeSlug]) {
-                  const generatedClips = generateClipsFromTranscript(searchQuery, result.episodeSlug, transcriptIndex);
-                  // Only keep if we can generate at least 1 valid clip
-                  return generatedClips.length > 0;
-                }
-                
-                // No clips and no valid transcript clips - filter out
-                return false;
-              });
-              
-              // Only update if results changed (to avoid infinite loops)
-              if (filteredResults.length !== searchResults.length) {
-                setSearchResults(filteredResults);
-              }
-            }
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-          }, [clips, transcriptIndex]);
 
   const hasResults = searchResults.length > 0;
   const showCarousel = hasResults || searchQuery;
@@ -349,6 +323,11 @@ function HomeContent() {
                 transcriptIndex={transcriptIndex}
                 searchQuery={searchQuery}
                 initialEpisodeSlug={returnFromEpisode || undefined}
+                ragClipsBySlug={Object.fromEntries(
+                  searchResults
+                    .filter((r) => r.ragClips && r.ragClips.length > 0)
+                    .map((r) => [r.episodeSlug, r.ragClips!])
+                )}
               />
                     )}
                   </>
